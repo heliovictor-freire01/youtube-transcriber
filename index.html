@@ -598,6 +598,7 @@
 
       currentData = data;
       renderResults(data);
+      document.getElementById('activate-ai').style.display = data.aiEnabled ? 'none' : 'block';
 
     } catch (err) {
       showError('Erro de conexão. Verifique sua internet e tente novamente.');
@@ -640,7 +641,7 @@
           <div class="lock-emoji">✨</div>
           <h3>Insights com IA desativados</h3>
           <p>Adicione sua chave da Anthropic nas variáveis de ambiente do Vercel para ativar resumos e insights automáticos.</p>
-          <a href="#activate-ai" class="btn-outline">Ver como ativar →</a>
+          <a href="https://console.anthropic.com" target="_blank" class="btn-outline">Saiba como ativar →</a>
         </div>`;
       return;
     }
