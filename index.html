@@ -523,36 +523,56 @@
 
   <!-- ── ACTIVATE AI ── -->
   <section id="activate-ai">
-    <h2>✨ Ativar Insights com IA</h2>
-    <p>Gere resumos, aprendizados e citações marcantes automaticamente com Claude (Anthropic).</p>
+    <h2>⚡ Ativar recursos opcionais</h2>
+    <p>Expanda o poder da app com duas integrações extras.</p>
+
+    <p style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px;margin-top:24px;">✨ Insights com IA — Claude (Anthropic)</p>
     <div class="steps">
       <div class="step">
         <div class="step-num">1</div>
         <div class="step-body">
           <strong>Crie sua conta na Anthropic</strong>
-          <p>Acesse <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> e crie uma conta gratuita.</p>
+          <p>Acesse <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> e crie uma conta.</p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
         <div class="step-body">
           <strong>Gere uma API Key</strong>
-          <p>Em <strong>Settings → API Keys</strong>, clique em "Create Key" e copie o valor gerado.</p>
+          <p>Em <strong>Settings → API Keys</strong>, clique em "Create Key" e copie o valor.</p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-body">
-          <strong>Adicione no painel do Vercel</strong>
-          <p>No seu projeto Vercel → <strong>Settings → Environment Variables</strong>, adicione:<br/>
-          Nome: <code>ANTHROPIC_API_KEY</code> &nbsp;·&nbsp; Valor: sua chave</p>
+          <strong>Adicione no Vercel</strong>
+          <p>Settings → Environment Variables → <code>ANTHROPIC_API_KEY</code></p>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px;margin-top:28px;">🎙 Transcrição por áudio — AssemblyAI</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Ativa como fallback automático para vídeos sem legendas. Plano gratuito com 5h/mês.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Crie sua conta no AssemblyAI</strong>
+          <p>Acesse <a href="https://www.assemblyai.com" target="_blank">assemblyai.com</a> → plano gratuito disponível.</p>
         </div>
       </div>
       <div class="step">
-        <div class="step-num">4</div>
+        <div class="step-num">2</div>
         <div class="step-body">
-          <strong>Redeploy o projeto</strong>
-          <p>Acesse <strong>Deployments</strong> no Vercel e clique em "Redeploy" para ativar a variável.</p>
+          <strong>Copie sua API Key</strong>
+          <p>No dashboard, sua chave fica em <strong>Account → API Key</strong>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Adicione no Vercel</strong>
+          <p>Settings → Environment Variables → <code>ASSEMBLYAI_API_KEY</code> → Redeploy.</p>
         </div>
       </div>
     </div>
@@ -582,7 +602,7 @@
     hideResults();
 
     try {
-      setLoadingText('Buscando transcrição...');
+      setLoadingText('Buscando legendas...');
       const res = await fetch('/api/transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -596,9 +616,13 @@
         return;
       }
 
-      currentData = data;
-      renderResults(data);
-      document.getElementById('activate-ai').style.display = data.aiEnabled ? 'none' : 'block';
+      // 202 = AssemblyAI job submitted, needs polling
+      if (res.status === 202 && data.jobId) {
+        await pollStatus(data);
+        return;
+      }
+
+      finishResults(data);
 
     } catch (err) {
       showError('Erro de conexão. Verifique sua internet e tente novamente.');
@@ -606,6 +630,49 @@
       setLoading(false);
     }
   }
+
+  async function pollStatus(meta) {
+    setLoadingText('Legendas indisponíveis — transcrevendo pelo áudio com IA...');
+    const titleParam = encodeURIComponent(meta.title || '');
+    const maxAttempts = 72; // ~6 min
+    let elapsed = 0;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      await sleep(5000);
+      elapsed += 5;
+
+      try {
+        const res  = await fetch(`/api/status?jobId=${meta.jobId}&title=${titleParam}`);
+        const data = await res.json();
+
+        if (data.status === 'completed') {
+          finishResults({ ...meta, ...data });
+          return;
+        }
+        if (data.status === 'error') {
+          showError('Não foi possível transcrever o áudio. Tente outro vídeo.');
+          setLoading(false);
+          return;
+        }
+        // still processing
+        setLoadingText(`Transcrevendo áudio... ${elapsed}s`);
+      } catch {
+        // network hiccup — keep trying
+      }
+    }
+
+    showError('Tempo limite excedido. Tente com um vídeo mais curto.');
+    setLoading(false);
+  }
+
+  function finishResults(data) {
+    currentData = data;
+    renderResults(data);
+    document.getElementById('activate-ai').style.display = data.aiEnabled ? 'none' : 'block';
+    setLoading(false);
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   function renderResults(data) {
     // Meta

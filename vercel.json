@@ -3,6 +3,9 @@
   "functions": {
     "api/transcribe.js": {
       "maxDuration": 30
+    },
+    "api/status.js": {
+      "maxDuration": 60
     }
   }
 }
