@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Transcriber</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0a0a;
+      --surface:   #141414;
+      --surface-2: #1c1c1c;
+      --border:    rgba(255,255,255,0.07);
+      --accent:    #8b5cf6;
+      --accent-h:  #7c3aed;
+      --accent-bg: rgba(139,92,246,0.1);
+      --text:      #f4f4f5;
+      --muted:     #71717a;
+      --success:   #22c55e;
+      --error-c:   #f87171;
+      --radius:    12px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── HEADER ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 18px 24px;
+      position: sticky;
+      top: 0;
+      background: rgba(10,10,10,0.85);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
+    .header-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-icon svg { width: 16px; height: 16px; fill: #fff; }
+    .logo-text { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+    .logo-badge {
+      margin-left: auto;
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--accent-bg);
+      color: var(--accent);
+      border: 1px solid rgba(139,92,246,0.25);
+      padding: 3px 8px;
+      border-radius: 20px;
+    }
+
+    /* ── MAIN ── */
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+
+    /* ── HERO ── */
+    .hero { text-align: center; margin-bottom: 48px; }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 14px;
+    }
+    .hero h1 .accent {
+      background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 16px;
+      color: var(--muted);
+      max-width: 480px;
+      margin: 0 auto 36px;
+    }
+
+    /* ── FORM ── */
+    .input-wrap {
+      display: flex;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 8px 8px 8px 16px;
+      transition: border-color .2s;
+    }
+    .input-wrap:focus-within { border-color: rgba(139,92,246,0.5); }
+    .input-wrap input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      font-family: inherit;
+      font-size: 15px;
+      color: var(--text);
+      min-width: 0;
+    }
+    .input-wrap input::placeholder { color: var(--muted); }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 9px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s, transform .1s;
+      flex-shrink: 0;
+    }
+    .btn-primary:hover { background: var(--accent-h); }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary svg { width: 15px; height: 15px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ── LOADING ── */
+    #loading {
+      text-align: center;
+      padding: 56px 0;
+      display: none;
+    }
+    .spinner-ring {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(139,92,246,0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: var(--muted); font-size: 14px; }
+
+    /* ── ERROR ── */
+    #error-msg {
+      display: none;
+      background: rgba(248,113,113,0.08);
+      border: 1px solid rgba(248,113,113,0.2);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      color: var(--error-c);
+      font-size: 14px;
+      text-align: center;
+      margin-top: 24px;
+    }
+
+    /* ── RESULTS ── */
+    #results { display: none; }
+    .results-inner { display: flex; flex-direction: column; gap: 16px; }
+
+    /* card base */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    /* meta card */
+    .meta-card { display: flex; gap: 16px; padding: 20px; align-items: flex-start; }
+    .meta-thumb {
+      width: 100px; height: 56px;
+      border-radius: 7px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: var(--surface-2);
+    }
+    .meta-info { flex: 1; min-width: 0; }
+    .meta-title {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.4;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .meta-channel { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .meta-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tag {
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 3px 8px;
+      border-radius: 20px;
+      color: var(--muted);
+    }
+    .tag.purple { background: var(--accent-bg); border-color: rgba(139,92,246,0.25); color: var(--accent); }
+
+    /* transcript card */
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-header h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .btn-ghost {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 5px;
+      transition: background .15s, border-color .15s;
+    }
+    .btn-ghost:hover { background: var(--surface-2); border-color: rgba(255,255,255,0.12); }
+    .btn-ghost svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .btn-ghost.success { color: var(--success); border-color: rgba(34,197,94,0.3); }
+
+    .transcript-body {
+      padding: 20px;
+      max-height: 360px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.8;
+      color: #d4d4d8;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.1) transparent;
+    }
+    .transcript-body::-webkit-scrollbar { width: 4px; }
+    .transcript-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    /* insights card */
+    .insights-locked {
+      padding: 36px 24px;
+      text-align: center;
+    }
+    .lock-emoji { font-size: 28px; margin-bottom: 12px; }
+    .insights-locked h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .insights-locked p { font-size: 14px; color: var(--muted); max-width: 360px; margin: 0 auto 20px; line-height: 1.6; }
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: 8px;
+      text-decoration: none;
+      cursor: pointer;
+      background: none;
+      transition: background .15s;
+    }
+    .btn-outline:hover { background: var(--accent-bg); }
+
+    /* insights content (when active) */
+    .insights-content { padding: 20px; }
+    .insight-block { margin-bottom: 24px; }
+    .insight-block:last-child { margin-bottom: 0; }
+    .insight-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .insight-block p { font-size: 14px; line-height: 1.7; color: #d4d4d8; }
+    .insight-list { list-style: none; }
+    .insight-list li {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #d4d4d8;
+      padding: 6px 0 6px 20px;
+      position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    .insight-list li:last-child { border-bottom: none; }
+    .insight-list li::before {
+      content: '›';
+      position: absolute;
+      left: 4px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .quote-list { list-style: none; }
+    .quote-list li {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #d4d4d8;
+      padding: 10px 16px;
+      margin-bottom: 8px;
+      background: var(--surface-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 6px 6px 0;
+      font-style: italic;
+    }
+    .quote-list li:last-child { margin-bottom: 0; }
+
+    /* actions */
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn-download {
+      flex: 1;
+      min-width: 160px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 12px 20px;
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background .15s;
+    }
+    .btn-download:hover { background: var(--accent-h); }
+    .btn-download svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .btn-new {
+      flex: 1;
+      min-width: 120px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 12px 20px;
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-new:hover { background: var(--surface-2); }
+
+    /* ── ACTIVATE AI SECTION ── */
+    #activate-ai {
+      margin-top: 64px;
+      padding: 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+    #activate-ai h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    #activate-ai > p { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+    .steps { display: flex; flex-direction: column; gap: 16px; }
+    .step { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num {
+      width: 28px; height: 28px;
+      background: var(--accent-bg);
+      border: 1px solid rgba(139,92,246,0.3);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--accent);
+      flex-shrink: 0;
+    }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .step-body p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .step-body a { color: var(--accent); text-decoration: none; }
+    .step-body a:hover { text-decoration: underline; }
+    .step-body code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #d4d4d8;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 540px) {
+      main { padding: 40px 16px 60px; }
+      .meta-card { flex-direction: column; }
+      .meta-thumb { width: 100%; height: 160px; }
+      .input-wrap { flex-direction: column; padding: 12px; gap: 8px; }
+      .input-wrap input { padding: 4px 0; }
+      .btn-primary { width: 100%; justify-content: center; padding: 12px; }
+      #activate-ai { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    </div>
+    <span class="logo-text">YouTube Transcriber</span>
+    <span class="logo-badge">Beta</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── HERO ── -->
+  <section class="hero">
+    <h1>Transcreva qualquer vídeo<br><span class="accent">em segundos</span></h1>
+    <p>Cole o link de um vídeo do YouTube e obtenha a transcrição completa instantaneamente — e insights com IA quando ativado.</p>
+
+    <form id="form">
+      <div class="input-wrap">
+        <input
+          type="text"
+          id="url-input"
+          placeholder="https://youtube.com/watch?v=..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button type="submit" id="submit-btn" class="btn-primary">
+          Transcrever
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ── LOADING ── -->
+  <div id="loading">
+    <div class="spinner-ring"></div>
+    <p id="loading-text">Buscando transcrição...</p>
+  </div>
+
+  <!-- ── ERROR ── -->
+  <div id="error-msg"></div>
+
+  <!-- ── RESULTS ── -->
+  <div id="results">
+    <div class="results-inner">
+
+      <!-- Meta -->
+      <div class="card meta-card">
+        <img id="thumb" class="meta-thumb" src="" alt="thumbnail" />
+        <div class="meta-info">
+          <div class="meta-title" id="v-title">—</div>
+          <div class="meta-channel" id="v-channel">—</div>
+          <div class="meta-tags">
+            <span class="tag purple" id="v-words">— palavras</span>
+            <span class="tag" id="v-chars">— caracteres</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transcript -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Transcrição</h3>
+          <button class="btn-ghost" id="copy-btn" onclick="copyTranscript()">
+            <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar
+          </button>
+        </div>
+        <div class="transcript-body" id="transcript-body"></div>
+      </div>
+
+      <!-- Insights -->
+      <div class="card" id="insights-card">
+        <div class="card-header">
+          <h3>Insights com IA</h3>
+        </div>
+        <div id="insights-body">
+          <!-- preenchido via JS -->
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button class="btn-download" onclick="downloadMd()">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Baixar como .md
+        </button>
+        <button class="btn-new" onclick="resetApp()">← Nova transcrição</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── ACTIVATE AI ── -->
+  <section id="activate-ai">
+    <h2>✨ Ativar Insights com IA</h2>
+    <p>Gere resumos, aprendizados e citações marcantes automaticamente com Claude (Anthropic).</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Crie sua conta na Anthropic</strong>
+          <p>Acesse <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> e crie uma conta gratuita.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Gere uma API Key</strong>
+          <p>Em <strong>Settings → API Keys</strong>, clique em "Create Key" e copie o valor gerado.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Adicione no painel do Vercel</strong>
+          <p>No seu projeto Vercel → <strong>Settings → Environment Variables</strong>, adicione:<br/>
+          Nome: <code>ANTHROPIC_API_KEY</code> &nbsp;·&nbsp; Valor: sua chave</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <strong>Redeploy o projeto</strong>
+          <p>Acesse <strong>Deployments</strong> no Vercel e clique em "Redeploy" para ativar a variável.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Feito com Claude · <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent);text-decoration:none">Anthropic</a>
+</footer>
+
+<script>
+  // ── State ──
+  let currentData = null;
+
+  // ── Form submit ──
+  document.getElementById('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = document.getElementById('url-input').value.trim();
+    if (!url) return;
+    await transcribe(url);
+  });
+
+  async function transcribe(url) {
+    setLoading(true);
+    hideError();
+    hideResults();
+
+    try {
+      setLoadingText('Buscando transcrição...');
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError(data.error || 'Erro desconhecido. Tente novamente.');
+        return;
+      }
+
+      currentData = data;
+      renderResults(data);
+
+    } catch (err) {
+      showError('Erro de conexão. Verifique sua internet e tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function renderResults(data) {
+    // Meta
+    document.getElementById('v-title').textContent = data.title || 'Sem título';
+    document.getElementById('v-channel').textContent = data.channel || '';
+    document.getElementById('v-words').textContent = (data.wordCount || 0).toLocaleString('pt-BR') + ' palavras';
+    document.getElementById('v-chars').textContent = (data.transcript?.length || 0).toLocaleString('pt-BR') + ' caracteres';
+
+    const thumb = document.getElementById('thumb');
+    if (data.thumbnail) {
+      thumb.src = data.thumbnail;
+      thumb.style.display = 'block';
+    } else {
+      thumb.style.display = 'none';
+    }
+
+    // Transcript
+    document.getElementById('transcript-body').textContent = data.transcript || '';
+
+    // Insights
+    renderInsights(data);
+
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderInsights(data) {
+    const body = document.getElementById('insights-body');
+
+    if (!data.aiEnabled) {
+      body.innerHTML = `
+        <div class="insights-locked">
+          <div class="lock-emoji">✨</div>
+          <h3>Insights com IA desativados</h3>
+          <p>Adicione sua chave da Anthropic nas variáveis de ambiente do Vercel para ativar resumos e insights automáticos.</p>
+          <a href="#activate-ai" class="btn-outline">Ver como ativar →</a>
+        </div>`;
+      return;
+    }
+
+    if (!data.insights) {
+      body.innerHTML = `<div class="insights-locked"><p style="color:var(--muted);font-size:14px">Não foi possível gerar insights para este vídeo.</p></div>`;
+      return;
+    }
+
+    const ins = data.insights;
+    let html = '<div class="insights-content">';
+
+    if (ins.summary) {
+      html += `<div class="insight-block">
+        <div class="insight-label">Resumo</div>
+        <p>${escHtml(ins.summary)}</p>
+      </div>`;
+    }
+
+    if (ins.learnings?.length) {
+      html += `<div class="insight-block">
+        <div class="insight-label">Principais aprendizados</div>
+        <ul class="insight-list">
+          ${ins.learnings.map(l => `<li>${escHtml(l)}</li>`).join('')}
+        </ul>
+      </div>`;
+    }
+
+    if (ins.quotes?.length) {
+      html += `<div class="insight-block">
+        <div class="insight-label">Citações marcantes</div>
+        <ul class="quote-list">
+          ${ins.quotes.map(q => `<li>"${escHtml(q)}"</li>`).join('')}
+        </ul>
+      </div>`;
+    }
+
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
+  // ── Actions ──
+  function copyTranscript() {
+    if (!currentData?.transcript) return;
+    navigator.clipboard.writeText(currentData.transcript).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.classList.add('success');
+      btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><polyline points="20 6 9 17 4 12"/></svg> Copiado!`;
+      setTimeout(() => {
+        btn.classList.remove('success');
+        btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copiar`;
+      }, 2000);
+    });
+  }
+
+  function downloadMd() {
+    if (!currentData) return;
+    const d = currentData;
+    const today = new Date().toISOString().split('T')[0];
+
+    let md = `---
+título: ${d.title || 'Sem título'}
+canal: ${d.channel || ''}
+url: ${document.getElementById('url-input').value.trim()}
+data_captura: ${today}
+palavras: ${d.wordCount || 0}
+---
+
+# ${d.title || 'Transcrição'}
+
+> **Canal:** ${d.channel || ''} | [Assistir no YouTube](${document.getElementById('url-input').value.trim()})
+
+## Transcrição
+
+${d.transcript || ''}
+`;
+
+    if (d.insights) {
+      const ins = d.insights;
+      if (ins.summary) md += `\n## Resumo\n\n${ins.summary}\n`;
+      if (ins.learnings?.length) {
+        md += `\n## Principais Aprendizados\n\n`;
+        ins.learnings.forEach(l => { md += `- ${l}\n`; });
+      }
+      if (ins.quotes?.length) {
+        md += `\n## Citações Marcantes\n\n`;
+        ins.quotes.forEach(q => { md += `> "${q}"\n\n`; });
+      }
+    }
+
+    const filename = (d.title || 'transcricao').replace(/[^a-z0-9À-ɏ\s-]/gi, '').trim().replace(/\s+/g, '-').toLowerCase().substring(0, 60) + '.md';
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function resetApp() {
+    hideResults();
+    hideError();
+    document.getElementById('url-input').value = '';
+    document.getElementById('url-input').focus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ── UI Helpers ──
+  function setLoading(on) {
+    document.getElementById('loading').style.display = on ? 'block' : 'none';
+    document.getElementById('submit-btn').disabled = on;
+  }
+  function setLoadingText(t) {
+    document.getElementById('loading-text').textContent = t;
+  }
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function hideError() {
+    document.getElementById('error-msg').style.display = 'none';
+  }
+  function hideResults() {
+    document.getElementById('results').style.display = 'none';
+    currentData = null;
+  }
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+
+</body>
+</html>
