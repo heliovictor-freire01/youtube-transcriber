@@ -634,7 +634,7 @@
   async function transcribeAudio(meta) {
     setLoadingText('Legendas indisponíveis — extraindo áudio com yt-dlp...');
     try {
-      const res  = await fetch('/api/transcribe-audio', {
+      const res  = await fetch('/api/transcribe_audio', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ url: meta.url }),
