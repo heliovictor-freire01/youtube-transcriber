@@ -34,55 +34,42 @@ async function getVideoMetadata(videoUrl) {
   }
 }
 
-async function getYouTubeAudioUrl(videoId, videoUrl) {
-  // ── Tentativa 1: cobalt.tools ─────────────────────────────────────────────
-  try {
-    const res = await fetch('https://api.cobalt.tools/', {
-      method: 'POST',
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url:           videoUrl,
-        downloadMode:  'audio',
-        audioFormat:   'best',
-        filenameStyle: 'basic',
-      }),
-      signal: AbortSignal.timeout(12000),
-    });
-    const data = await res.json().catch(() => null);
-    if (data?.url) {
-      console.log('[audio] cobalt.tools OK');
-      return data.url;
-    }
-    console.log('[cobalt failed]', res.status, data?.error?.code);
-  } catch (e) {
-    console.log('[cobalt failed]', e.message);
-  }
-
-  // ── Tentativa 2: Invidious (múltiplas instâncias públicas) ─────────────────
+async function getYouTubeAudioUrl(videoId) {
+  // Invidious: frontends públicos do YouTube que expõem a URL de áudio
   const instances = [
-    'https://invidious.snopyta.org',
-    'https://vid.puffyan.us',
+    'https://inv.tux.pizza',
+    'https://invidious.privacydev.net',
+    'https://yt.artemislena.eu',
+    'https://invidious.lunar.icu',
+    'https://iv.melmac.space',
+    'https://invidious.fdn.fr',
+    'https://invidious.nerdvpn.de',
     'https://invidious.kavin.rocks',
     'https://y.com.sb',
   ];
 
   for (const base of instances) {
     try {
+      console.log('[audio] tentando Invidious:', base);
       const res = await fetch(`${base}/api/v1/videos/${videoId}`, {
-        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Transcriber/1.0)' },
+        signal: AbortSignal.timeout(10000),
       });
-      if (!res.ok) continue;
+      if (!res.ok) { console.log('[audio]', base, 'HTTP', res.status); continue; }
 
-      const data  = await res.json();
-      const fmts  = (data.adaptiveFormats || [])
+      const data = await res.json();
+      const fmts = (data.adaptiveFormats || [])
         .filter(f => f.type?.startsWith('audio/'))
         .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
 
       if (fmts[0]?.url) {
-        console.log('[audio] Invidious OK:', base);
+        console.log('[audio] OK:', base);
         return fmts[0].url;
       }
-    } catch { continue; }
+      console.log('[audio]', base, 'sem formato de áudio');
+    } catch (e) {
+      console.log('[audio]', base, 'erro:', e.message);
+    }
   }
 
   throw new Error('Não foi possível obter o áudio deste vídeo. Tente outro link.');
@@ -179,7 +166,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const audioUrl = await getYouTubeAudioUrl(videoId, url);
+    const audioUrl = await getYouTubeAudioUrl(videoId);
     const { AssemblyAI } = require('assemblyai');
     const client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });
 
