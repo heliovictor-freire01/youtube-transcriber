@@ -34,19 +34,23 @@ async function getVideoMetadata(videoUrl) {
   }
 }
 
-async function getYouTubeAudioUrl(videoId) {
-  const ytdl = require('@distube/ytdl-core');
-  const info  = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
-  const fmts  = ytdl.filterFormats(info.formats, 'audioonly');
+async function getYouTubeAudioUrl(videoUrl) {
+  // cobalt.tools: serviço público gratuito que lida com bot detection do YouTube
+  const res = await fetch('https://api.cobalt.tools/', {
+    method: 'POST',
+    headers: {
+      'Accept':       'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ url: videoUrl, downloadMode: 'audio' }),
+    signal: AbortSignal.timeout(15000),
+  });
 
-  // Prefer mp4/aac → webm/opus → any audio
-  const fmt =
-    fmts.find(f => f.mimeType?.includes('audio/mp4'))  ||
-    fmts.find(f => f.mimeType?.includes('audio/webm')) ||
-    fmts[0];
-
-  if (!fmt) throw new Error('No audio format available');
-  return fmt.url;
+  if (!res.ok) throw new Error(`cobalt.tools HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.status === 'error') throw new Error(data.error?.code || 'cobalt error');
+  if (!data.url) throw new Error('cobalt returned no URL');
+  return data.url;
 }
 
 async function generateInsights(transcript, title) {
@@ -140,7 +144,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const audioUrl = await getYouTubeAudioUrl(videoId);
+    const audioUrl = await getYouTubeAudioUrl(url);
     const { AssemblyAI } = require('assemblyai');
     const client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });
 

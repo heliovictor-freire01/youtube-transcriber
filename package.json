@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
-    "@distube/ytdl-core": "^4.16.12",
     "assemblyai": "^4.32.1",
     "youtube-transcript": "^1.2.1"
   }
