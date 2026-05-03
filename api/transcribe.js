@@ -34,47 +34,6 @@ async function getVideoMetadata(videoUrl) {
   }
 }
 
-async function getYouTubeAudioUrl(videoId) {
-  // Invidious: frontends públicos do YouTube que expõem a URL de áudio
-  const instances = [
-    'https://inv.tux.pizza',
-    'https://invidious.privacydev.net',
-    'https://yt.artemislena.eu',
-    'https://invidious.lunar.icu',
-    'https://iv.melmac.space',
-    'https://invidious.fdn.fr',
-    'https://invidious.nerdvpn.de',
-    'https://invidious.kavin.rocks',
-    'https://y.com.sb',
-  ];
-
-  for (const base of instances) {
-    try {
-      console.log('[audio] tentando Invidious:', base);
-      const res = await fetch(`${base}/api/v1/videos/${videoId}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Transcriber/1.0)' },
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!res.ok) { console.log('[audio]', base, 'HTTP', res.status); continue; }
-
-      const data = await res.json();
-      const fmts = (data.adaptiveFormats || [])
-        .filter(f => f.type?.startsWith('audio/'))
-        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-
-      if (fmts[0]?.url) {
-        console.log('[audio] OK:', base);
-        return fmts[0].url;
-      }
-      console.log('[audio]', base, 'sem formato de áudio');
-    } catch (e) {
-      console.log('[audio]', base, 'erro:', e.message);
-    }
-  }
-
-  throw new Error('Não foi possível obter o áudio deste vídeo. Tente outro link.');
-}
-
 async function generateInsights(transcript, title) {
   const Anthropic = require('@anthropic-ai/sdk');
   const client    = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -120,12 +79,11 @@ module.exports = async function handler(req, res) {
   const videoId = extractVideoId(url);
   if (!videoId) return res.status(400).json({ error: 'URL inválida. Use um link do YouTube válido.' });
 
-  // Fetch metadata (always)
   const metadata = await getVideoMetadata(url);
 
-  // ── Path 1: youtube-transcript (fast, free) ───────────────────────────────
+  // ── Path 1: youtube-transcript (rápido, gratuito) ─────────────────────────
   try {
-    const segments = await YoutubeTranscript.fetchTranscript(videoId);
+    const segments   = await YoutubeTranscript.fetchTranscript(videoId);
     const transcript = segments
       .map(s => s.text)
       .join(' ')
@@ -133,9 +91,9 @@ module.exports = async function handler(req, res) {
       .replace(/\s+/g, ' ')
       .trim();
 
-    const wordCount  = transcript.split(/\s+/).filter(Boolean).length;
-    const aiEnabled  = !!process.env.ANTHROPIC_API_KEY;
-    let   insights   = null;
+    const wordCount = transcript.split(/\s+/).filter(Boolean).length;
+    const aiEnabled = !!process.env.ANTHROPIC_API_KEY;
+    let   insights  = null;
 
     if (aiEnabled && metadata?.title) {
       try { insights = await generateInsights(transcript, metadata.title); }
@@ -155,41 +113,24 @@ module.exports = async function handler(req, res) {
     });
 
   } catch (captionErr) {
-    console.log('[captions failed]', captionErr.message, '— trying AssemblyAI fallback');
+    console.log('[captions failed]', captionErr.message);
   }
 
-  // ── Path 2: AssemblyAI fallback (audio transcription) ────────────────────
+  // ── Path 2: áudio via yt-dlp (Python) ────────────────────────────────────
+  // Retorna needsAudio: true — o frontend chama /api/transcribe-audio
   if (!process.env.ASSEMBLYAI_API_KEY) {
     return res.status(404).json({
-      error: 'Este vídeo não possui legendas disponíveis. Ative a transcrição por áudio adicionando a chave ASSEMBLYAI_API_KEY no Vercel.',
+      error: 'Este vídeo não possui legendas. Adicione ASSEMBLYAI_API_KEY no Vercel para ativar transcrição por áudio.',
     });
   }
 
-  try {
-    const audioUrl = await getYouTubeAudioUrl(videoId);
-    const { AssemblyAI } = require('assemblyai');
-    const client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });
-
-    const job = await client.transcripts.submit({
-      audio_url:          audioUrl,
-      language_detection: true,
-    });
-
-    // Return 202 Accepted — client will poll /api/status
-    return res.status(202).json({
-      jobId:     job.id,
-      fallback:  'assemblyai',
-      videoId,
-      title:     metadata?.title     || 'Vídeo do YouTube',
-      channel:   metadata?.channel   || 'Canal desconhecido',
-      thumbnail: metadata?.thumbnail || null,
-      aiEnabled: !!process.env.ANTHROPIC_API_KEY,
-    });
-
-  } catch (err) {
-    console.error('[assemblyai submit error]', err.message);
-    return res.status(500).json({
-      error: 'Não foi possível processar o vídeo. Tente novamente.',
-    });
-  }
+  return res.status(200).json({
+    needsAudio: true,
+    videoId,
+    url,
+    title:     metadata?.title     || 'Vídeo do YouTube',
+    channel:   metadata?.channel   || 'Canal desconhecido',
+    thumbnail: metadata?.thumbnail || null,
+    aiEnabled: !!process.env.ANTHROPIC_API_KEY,
+  });
 };

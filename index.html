@@ -616,9 +616,9 @@
         return;
       }
 
-      // 202 = AssemblyAI job submitted, needs polling
-      if (res.status === 202 && data.jobId) {
-        await pollStatus(data);
+      // needsAudio = legendas indisponíveis, usar yt-dlp Python
+      if (data.needsAudio) {
+        await transcribeAudio(data);
         return;
       }
 
@@ -631,8 +631,25 @@
     }
   }
 
+  async function transcribeAudio(meta) {
+    setLoadingText('Legendas indisponíveis — extraindo áudio com yt-dlp...');
+    try {
+      const res  = await fetch('/api/transcribe-audio', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ url: meta.url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || 'Erro ao processar o áudio.'); setLoading(false); return; }
+      await pollStatus({ ...meta, ...data });
+    } catch {
+      showError('Erro de conexão. Tente novamente.');
+      setLoading(false);
+    }
+  }
+
   async function pollStatus(meta) {
-    setLoadingText('Legendas indisponíveis — transcrevendo pelo áudio com IA...');
+    setLoadingText('Transcrevendo áudio com AssemblyAI...');
     const titleParam = encodeURIComponent(meta.title || '');
     const maxAttempts = 72; // ~6 min
     let elapsed = 0;

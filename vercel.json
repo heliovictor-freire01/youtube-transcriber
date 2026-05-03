@@ -4,6 +4,9 @@
     "api/transcribe.js": {
       "maxDuration": 30
     },
+    "api/transcribe_audio.py": {
+      "maxDuration": 30
+    },
     "api/status.js": {
       "maxDuration": 60
     }
