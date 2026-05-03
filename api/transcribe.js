@@ -34,23 +34,58 @@ async function getVideoMetadata(videoUrl) {
   }
 }
 
-async function getYouTubeAudioUrl(videoUrl) {
-  // cobalt.tools: serviço público gratuito que lida com bot detection do YouTube
-  const res = await fetch('https://api.cobalt.tools/', {
-    method: 'POST',
-    headers: {
-      'Accept':       'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ url: videoUrl, downloadMode: 'audio' }),
-    signal: AbortSignal.timeout(15000),
-  });
+async function getYouTubeAudioUrl(videoId, videoUrl) {
+  // ── Tentativa 1: cobalt.tools ─────────────────────────────────────────────
+  try {
+    const res = await fetch('https://api.cobalt.tools/', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url:           videoUrl,
+        downloadMode:  'audio',
+        audioFormat:   'best',
+        filenameStyle: 'basic',
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    const data = await res.json().catch(() => null);
+    if (data?.url) {
+      console.log('[audio] cobalt.tools OK');
+      return data.url;
+    }
+    console.log('[cobalt failed]', res.status, data?.error?.code);
+  } catch (e) {
+    console.log('[cobalt failed]', e.message);
+  }
 
-  if (!res.ok) throw new Error(`cobalt.tools HTTP ${res.status}`);
-  const data = await res.json();
-  if (data.status === 'error') throw new Error(data.error?.code || 'cobalt error');
-  if (!data.url) throw new Error('cobalt returned no URL');
-  return data.url;
+  // ── Tentativa 2: Invidious (múltiplas instâncias públicas) ─────────────────
+  const instances = [
+    'https://invidious.snopyta.org',
+    'https://vid.puffyan.us',
+    'https://invidious.kavin.rocks',
+    'https://y.com.sb',
+  ];
+
+  for (const base of instances) {
+    try {
+      const res = await fetch(`${base}/api/v1/videos/${videoId}`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) continue;
+
+      const data  = await res.json();
+      const fmts  = (data.adaptiveFormats || [])
+        .filter(f => f.type?.startsWith('audio/'))
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+
+      if (fmts[0]?.url) {
+        console.log('[audio] Invidious OK:', base);
+        return fmts[0].url;
+      }
+    } catch { continue; }
+  }
+
+  throw new Error('Não foi possível obter o áudio deste vídeo. Tente outro link.');
 }
 
 async function generateInsights(transcript, title) {
@@ -144,7 +179,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const audioUrl = await getYouTubeAudioUrl(url);
+    const audioUrl = await getYouTubeAudioUrl(videoId, url);
     const { AssemblyAI } = require('assemblyai');
     const client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });
 
